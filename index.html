@@ -317,31 +317,25 @@ h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
   makeBtn.onclick = async () => {
     await document.fonts.ready;
     const imgs = await Promise.all(slots.map(loadImg));
-    // Square export: tall photo strips on top, word row + footer below
-    const S = 1500, PAD = 56, GAP = 20, SGAP = 10, FOOT = 96;
+    // Square export: word bar on top, full-bleed photo strips, details bar on bottom
+    const S = 1500, PAD = 56, GAP = 20, BAR_PAD = 40, FOOT_H = 150;
     const W = S, H = S;
-    const T = Math.min(200, (S - PAD * 2 - (N - 1) * GAP) / N);
+    const T = Math.min(180, (S - PAD * 2 - (N - 1) * GAP) / N);
     const BORDER = Math.round(T * 0.04);
     const ROW = N * T + (N - 1) * GAP;
     const X0 = (W - ROW) / 2;
-    const ROW_TOP = H - PAD - FOOT - T;
-    const STRIP_TOP = PAD, STRIP_H = ROW_TOP - 44 - PAD;
-    const STRIP_W = (W - PAD * 2 - (N - 1) * SGAP) / N;
+    const ROW_TOP = BAR_PAD;
+    const STRIP_TOP = BAR_PAD * 2 + T, STRIP_H = H - FOOT_H - STRIP_TOP;
     const c = document.createElement('canvas'); c.width = W; c.height = H;
     const ctx = c.getContext('2d');
-    ctx.fillStyle = '#16181D'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, W, H);
 
-    imgs.forEach((im, i) => { // strips: center-crop each letter photo to a tall slice
-      const x = PAD + i * (STRIP_W + SGAP);
+    imgs.forEach((im, i) => { // strips: edge to edge, no gaps; center-crop each photo
+      const x = Math.round(i * W / N), sw0 = Math.round((i + 1) * W / N) - x;
       const iw = im.naturalWidth, ih = im.naturalHeight;
-      const sc = Math.max(STRIP_W / iw, STRIP_H / ih);
-      const sw = STRIP_W / sc, sh = STRIP_H / sc;
-      ctx.save();
-      ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(x, STRIP_TOP, STRIP_W, STRIP_H, 8); else ctx.rect(x, STRIP_TOP, STRIP_W, STRIP_H);
-      ctx.clip();
-      ctx.drawImage(im, (iw - sw) / 2, (ih - sh) / 2, sw, sh, x, STRIP_TOP, STRIP_W, STRIP_H);
-      ctx.restore();
+      const sc = Math.max(sw0 / iw, STRIP_H / ih);
+      const sw = sw0 / sc, sh = STRIP_H / sc;
+      ctx.drawImage(im, (iw - sw) / 2, (ih - sh) / 2, sw, sh, x, STRIP_TOP, sw0, STRIP_H);
     });
 
     imgs.forEach((im, i) => {
@@ -357,7 +351,7 @@ h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
       ctx.restore();
     });
 
-    const baseY = H - PAD;
+    const baseY = H - 52;
     ctx.textAlign = 'left';
     ctx.font = '800 64px "Bricolage Grotesque", system-ui, sans-serif';
     let x = PAD;
