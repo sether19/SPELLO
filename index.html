@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Letter Hunt (v0)</title>
+<title>SPELLO (v0)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
@@ -105,7 +105,7 @@ h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
 <body>
 <main>
   <header>
-    <h1>Letter Hunt</h1>
+    <h1>SPELLO</h1>
     <span class="date" id="date"></span>
   </header>
 
@@ -149,7 +149,8 @@ h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
   const KEY = 'letterhunt:' + WORD;
   const ROT = [-2.5, 1.8, -1.2, 2.6, -1.9, 1.1, -2.2, 2];
   const OUT_PX = 600;
-  const GAME_NAME = 'Word on the Street';
+  const GAME_NAME = 'SPELLO';
+  const NAME_COLORS = ['#FFC642', '#427BFF', '#2DB84C', '#F0443A', '#FF8A1F', '#9B5CFF'];
   const SITE_URL = 'yoururl.com'; // placeholder for the export footer
 
   const $ = id => document.getElementById(id);
@@ -322,7 +323,7 @@ h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
     const X0 = (W - ROW) / 2; // centers short words on the minimum width
     const c = document.createElement('canvas'); c.width = W; c.height = H;
     const ctx = c.getContext('2d');
-    ctx.fillStyle = '#FFD23F'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#16181D'; ctx.fillRect(0, 0, W, H);
 
     imgs.forEach((im, i) => {
       const cx = X0 + i * (T + GAP) + T / 2, cy = PAD + T / 2;
@@ -338,16 +339,23 @@ h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
     });
 
     const baseY = PAD + T + FOOT * .78;
-    ctx.fillStyle = '#0E1116';
-    ctx.font = '800 56px "Bricolage Grotesque", system-ui, sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(GAME_NAME, PAD, baseY);
+    ctx.font = '800 64px "Bricolage Grotesque", system-ui, sans-serif';
+    let x = PAD;
+    GAME_NAME.split('').forEach((ch, i) => {
+      ctx.fillStyle = NAME_COLORS[i % NAME_COLORS.length];
+      ctx.fillText(ch, x, baseY);
+      x += ctx.measureText(ch).width + 3;
+    });
 
+    const d = new Date();
+    const stamp = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
     ctx.textAlign = 'right';
+    ctx.fillStyle = '#F2F3F5';
     ctx.font = '700 28px "Bricolage Grotesque", system-ui, sans-serif';
-    ctx.fillText(`${WORD}   ${$('date').textContent}`, W - PAD, baseY - 36);
+    ctx.fillText(`${WORD}   ${stamp}`, W - PAD, baseY - 36);
     ctx.font = '500 24px "Bricolage Grotesque", system-ui, sans-serif';
-    ctx.fillStyle = 'rgba(14,17,22,.7)';
+    ctx.fillStyle = 'rgba(242,243,245,.65)';
     ctx.fillText(SITE_URL, W - PAD, baseY);
 
     $('out').src = c.toDataURL('image/png');
@@ -357,7 +365,7 @@ h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
 
     c.toBlob(b => {
       outBlob = b;
-      const file = new File([b], `letter-hunt-${WORD.toLowerCase()}.png`, { type: 'image/png' });
+      const file = new File([b], `spello-${WORD.toLowerCase()}.png`, { type: 'image/png' });
       let ok = false;
       try { ok = !!(navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) {}
       $('share').hidden = !ok;
@@ -366,8 +374,8 @@ h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
 
   $('share').onclick = async () => {
     if (!outBlob) return;
-    const file = new File([outBlob], `letter-hunt-${WORD.toLowerCase()}.png`, { type: 'image/png' });
-    try { await navigator.share({ files: [file], title: 'Letter Hunt: ' + WORD }); } catch (e) {}
+    const file = new File([outBlob], `spello-${WORD.toLowerCase()}.png`, { type: 'image/png' });
+    try { await navigator.share({ files: [file], title: GAME_NAME + ': ' + WORD }); } catch (e) {}
   };
 
   render();
