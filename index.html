@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Letter Hunt (v0)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EEF0F2; --ink:#0E1116; --tile:#FFFFFF; --muted:#5F6672;
+  --line:#C9CDD3; --yellow:#FFD23F; --red:#E5402A; --scrim:rgba(14,17,22,.94);
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#1A1D24; --ink:#F2F3F5; --tile:#242833; --muted:#9AA0AA;
+    --line:#3A3F4B; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#1A1D24; --ink:#F2F3F5; --tile:#242833; --muted:#9AA0AA;
+  --line:#3A3F4B; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;
+  line-height:1.45; -webkit-tap-highlight-color:transparent;
+}
+main{max-width:640px; margin:0 auto; padding:20px 16px 48px}
+header{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:28px}
+h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
+.date{color:var(--muted); font-size:.95rem}
+.intro{font-size:1.05rem; margin:0 0 28px; max-width:34ch}
+
+.word{
+  --n:5; --gap:10px;
+  display:flex; gap:var(--gap); justify-content:center; margin:0 0 20px;
+}
+.tile{
+  --size:min(calc((100vw - 32px - (var(--n) - 1) * var(--gap)) / var(--n)), 112px);
+  width:var(--size); height:var(--size); padding:0;
+  border:2px dashed var(--line); border-radius:6px; background:transparent;
+  color:var(--muted); font:800 calc(var(--size) * .55)/1 "Bricolage Grotesque",system-ui,sans-serif;
+  cursor:pointer; display:grid; place-items:center; position:relative;
+  transition:transform .25s ease, border-color .15s;
+}
+.tile:hover{border-color:var(--ink); color:var(--ink)}
+.tile:focus-visible{outline:3px solid var(--red); outline-offset:3px}
+.tile.filled{
+  border:5px solid var(--tile); border-radius:3px; background:var(--tile);
+  transform:rotate(var(--r,0deg));
+  box-shadow:0 3px 10px rgba(0,0,0,.18);
+}
+.tile.filled img{width:100%; height:100%; object-fit:cover; display:block}
+.status{text-align:center; color:var(--muted); margin:0 0 28px; font-size:.95rem}
+
+.btn{
+  font:600 1.05rem "Bricolage Grotesque",system-ui,sans-serif;
+  border:0; border-radius:999px; padding:14px 26px; cursor:pointer;
+  background:var(--yellow); color:#0E1116;
+}
+.btn:disabled{background:var(--line); color:var(--muted); cursor:not-allowed}
+.btn:focus-visible,.link:focus-visible{outline:3px solid var(--red); outline-offset:3px}
+.link{background:none; border:0; color:inherit; font:inherit; text-decoration:underline; cursor:pointer; padding:10px}
+.actions{display:flex; justify-content:center; gap:12px; flex-wrap:wrap; align-items:center}
+
+#result{margin-top:36px; text-align:center}
+#result img{max-width:100%; border-radius:4px; box-shadow:0 6px 24px rgba(0,0,0,.2)}
+#result p{color:var(--muted); margin:12px 0 16px}
+
+/* crop overlay */
+#crop{
+  position:fixed; inset:0; z-index:20; background:var(--scrim); color:#F2F3F5;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;
+  padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px));
+}
+#crop[hidden]{display:none}
+#crop h2{margin:0; font-size:1.2rem; font-weight:600}
+#crop h2 b{font-weight:800; color:var(--yellow)}
+.vp{
+  width:min(88vw, 62vh, 520px); aspect-ratio:1; position:relative; overflow:hidden;
+  touch-action:none; cursor:grab; background:#000; border-radius:4px;
+  outline:2px solid var(--yellow);
+}
+.vp:active{cursor:grabbing}
+.vp img{position:absolute; left:0; top:0; transform-origin:0 0; max-width:none; user-select:none; -webkit-user-drag:none; pointer-events:none}
+.vp::after{ /* thirds guide */
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:
+    linear-gradient(90deg,transparent calc(33.33% - .5px),rgba(255,255,255,.35) calc(33.33% - .5px),rgba(255,255,255,.35) calc(33.33% + .5px),transparent calc(33.33% + .5px),transparent calc(66.66% - .5px),rgba(255,255,255,.35) calc(66.66% - .5px),rgba(255,255,255,.35) calc(66.66% + .5px),transparent calc(66.66% + .5px)),
+    linear-gradient(180deg,transparent calc(33.33% - .5px),rgba(255,255,255,.35) calc(33.33% - .5px),rgba(255,255,255,.35) calc(33.33% + .5px),transparent calc(33.33% + .5px),transparent calc(66.66% - .5px),rgba(255,255,255,.35) calc(66.66% - .5px),rgba(255,255,255,.35) calc(66.66% + .5px),transparent calc(66.66% + .5px));
+}
+.hint{color:#9AA0AA; font-size:.9rem; margin:0}
+#crop .link{color:#F2F3F5}
+@media (prefers-reduced-motion:reduce){.tile{transition:none}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Letter Hunt</h1>
+    <span class="date" id="date"></span>
+  </header>
+
+  <p class="intro">Find each letter out in the world. Photograph it, crop it, and spell today’s word.</p>
+
+  <div class="word" id="word" role="group" aria-label="Today’s word"></div>
+  <p class="status" id="status" aria-live="polite"></p>
+
+  <div class="actions">
+    <button class="btn" id="make" disabled>Make my word</button>
+    <button class="link" id="clear" hidden>Clear letters</button>
+  </div>
+
+  <section id="result" hidden>
+    <img id="out" alt="">
+    <p id="saveHint">Press and hold the image to save it.</p>
+    <button class="btn" id="share" hidden>Share</button>
+  </section>
+</main>
+
+<input type="file" id="cam" accept="image/*" capture="environment" hidden>
+
+<div id="crop" hidden role="dialog" aria-modal="true" aria-labelledby="cropTitle">
+  <h2 id="cropTitle">Crop to the letter <b id="cropLetter"></b></h2>
+  <div class="vp" id="vp"><img id="cropImg" alt=""></div>
+  <p class="hint">Drag to move, pinch to zoom.</p>
+  <div class="actions">
+    <button class="link" id="cancel">Cancel</button>
+    <button class="link" id="retake">Retake</button>
+    <button class="btn" id="use">Use this</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  // Word: edit DEFAULT_WORD, or test others with #word on the URL (e.g. …#moped)
+  const DEFAULT_WORD = 'BRICK';
+  const fromHash = location.hash.slice(1).replace(/[^a-z]/gi, '').toUpperCase();
+  const WORD = fromHash.length >= 2 && fromHash.length <= 8 ? fromHash : DEFAULT_WORD;
+  const N = WORD.length;
+  const KEY = 'letterhunt:' + WORD;
+  const ROT = [-2.5, 1.8, -1.2, 2.6, -1.9, 1.1, -2.2, 2];
+  const OUT_PX = 600;
+
+  const $ = id => document.getElementById(id);
+  const wordEl = $('word'), statusEl = $('status'), makeBtn = $('make'), clearBtn = $('clear');
+  const cam = $('cam'), crop = $('crop'), vp = $('vp'), cropImg = $('cropImg');
+
+  $('date').textContent = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+  wordEl.style.setProperty('--n', N);
+
+  let slots = Array(N).fill(null);
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (Array.isArray(saved) && saved.length === N) slots = saved;
+  } catch (e) {}
+  const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(slots)); } catch (e) {} };
+
+  function render() {
+    wordEl.innerHTML = '';
+    WORD.split('').forEach((ch, i) => {
+      const b = document.createElement('button');
+      b.className = 'tile' + (slots[i] ? ' filled' : '');
+      b.style.setProperty('--r', ROT[i % ROT.length] + 'deg');
+      b.setAttribute('aria-label', slots[i] ? `Letter ${ch}, found. Tap to retake.` : `Letter ${ch}, not found yet. Tap to photograph.`);
+      if (slots[i]) { const im = new Image(); im.src = slots[i]; im.alt = ''; b.appendChild(im); }
+      else b.textContent = ch;
+      b.onclick = () => openCamera(i);
+      wordEl.appendChild(b);
+    });
+    const found = slots.filter(Boolean).length;
+    statusEl.textContent = found === N ? 'All letters found.' : `${found} of ${N} found`;
+    makeBtn.disabled = found < N;
+    clearBtn.hidden = found === 0;
+  }
+
+  // ---- camera ----
+  let active = -1;
+  function openCamera(i) { active = i; cam.click(); }
+  cam.addEventListener('change', () => {
+    const f = cam.files && cam.files[0];
+    cam.value = '';
+    if (!f) return;
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    img.onload = () => startCrop(img, url);
+    img.onerror = () => { URL.revokeObjectURL(url); alert('That photo couldn’t be opened. Try taking it again.'); };
+    img.src = url;
+  });
+
+  // ---- crop ----
+  let V = 0, w = 0, h = 0, s = 1, s0 = 1, tx = 0, ty = 0, srcImg = null, srcUrl = null;
+  const pts = new Map();
+
+  function startCrop(img, url) {
+    if (srcUrl && srcUrl !== url) URL.revokeObjectURL(srcUrl);
+    srcImg = img; srcUrl = url;
+    $('cropLetter').textContent = WORD[active];
+    crop.hidden = false;
+    cropImg.src = url;
+    requestAnimationFrame(() => {
+      V = vp.clientWidth; w = img.naturalWidth; h = img.naturalHeight;
+      s0 = Math.max(V / w, V / h); s = s0;
+      tx = (V - w * s) / 2; ty = (V - h * s) / 2;
+      cropImg.style.width = w + 'px'; cropImg.style.height = h + 'px';
+      apply();
+      $('use').focus();
+    });
+  }
+  function clampAll() {
+    s = Math.min(Math.max(s, s0), s0 * 8);
+    tx = Math.min(0, Math.max(V - w * s, tx));
+    ty = Math.min(0, Math.max(V - h * s, ty));
+  }
+  function apply() { cropImg.style.transform = `translate(${tx}px,${ty}px) scale(${s})`; }
+  function local(e) { const r = vp.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+  function zoomAround(px, py, factor) {
+    const ix = (px - tx) / s, iy = (py - ty) / s;
+    s = Math.min(Math.max(s * factor, s0), s0 * 8);
+    tx = px - ix * s; ty = py - iy * s;
+    clampAll(); apply();
+  }
+
+  vp.addEventListener('pointerdown', e => { vp.setPointerCapture(e.pointerId); pts.set(e.pointerId, local(e)); });
+  vp.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) return;
+    const cur = local(e);
+    if (pts.size === 1) {
+      const prev = pts.get(e.pointerId);
+      tx += cur.x - prev.x; ty += cur.y - prev.y;
+      pts.set(e.pointerId, cur);
+      clampAll(); apply();
+    } else {
+      const ids = [...pts.keys()].slice(0, 2);
+      if (!ids.includes(e.pointerId)) { pts.set(e.pointerId, cur); return; }
+      const [a0, b0] = ids.map(id => pts.get(id));
+      pts.set(e.pointerId, cur);
+      const [a1, b1] = ids.map(id => pts.get(id));
+      const od = Math.hypot(a0.x - b0.x, a0.y - b0.y) || 1;
+      const nd = Math.hypot(a1.x - b1.x, a1.y - b1.y) || 1;
+      const om = { x: (a0.x + b0.x) / 2, y: (a0.y + b0.y) / 2 };
+      const nm = { x: (a1.x + b1.x) / 2, y: (a1.y + b1.y) / 2 };
+      const ix = (om.x - tx) / s, iy = (om.y - ty) / s;
+      s = Math.min(Math.max(s * nd / od, s0), s0 * 8);
+      tx = nm.x - ix * s; ty = nm.y - iy * s;
+      clampAll(); apply();
+    }
+  });
+  const end = e => pts.delete(e.pointerId);
+  vp.addEventListener('pointerup', end);
+  vp.addEventListener('pointercancel', end);
+  vp.addEventListener('wheel', e => {
+    e.preventDefault();
+    const p = local(e);
+    zoomAround(p.x, p.y, Math.exp(-e.deltaY * 0.0015));
+  }, { passive: false });
+
+  function closeCrop() {
+    crop.hidden = true; pts.clear();
+    if (srcUrl) { URL.revokeObjectURL(srcUrl); srcUrl = null; }
+    cropImg.removeAttribute('src');
+  }
+  $('cancel').onclick = closeCrop;
+  $('retake').onclick = () => cam.click();
+  $('use').onclick = () => {
+    const c = document.createElement('canvas');
+    c.width = c.height = OUT_PX;
+    c.getContext('2d').drawImage(srcImg, -tx / s, -ty / s, V / s, V / s, 0, 0, OUT_PX, OUT_PX);
+    slots[active] = c.toDataURL('image/jpeg', 0.88);
+    persist(); closeCrop(); render();
+    $('result').hidden = true;
+  };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !crop.hidden) closeCrop(); });
+
+  clearBtn.onclick = () => {
+    slots = Array(N).fill(null); persist(); render();
+    $('result').hidden = true;
+  };
+
+  // ---- assemble ----
+  const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+  let outBlob = null;
+
+  makeBtn.onclick = async () => {
+    await document.fonts.ready;
+    const imgs = await Promise.all(slots.map(loadImg));
+    const T = 360, GAP = 28, PAD = 56, BORDER = 12, FOOT = 96;
+    const W = PAD * 2 + N * T + (N - 1) * GAP, H = PAD + T + FOOT + PAD / 2;
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#FFD23F'; ctx.fillRect(0, 0, W, H);
+
+    imgs.forEach((im, i) => {
+      const cx = PAD + i * (T + GAP) + T / 2, cy = PAD + T / 2;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(ROT[i % ROT.length] * Math.PI / 180);
+      ctx.shadowColor = 'rgba(0,0,0,.22)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(-T / 2, -T / 2, T, T);
+      ctx.shadowColor = 'transparent';
+      ctx.drawImage(im, -T / 2 + BORDER, -T / 2 + BORDER, T - BORDER * 2, T - BORDER * 2);
+      ctx.restore();
+    });
+
+    const baseY = PAD + T + FOOT * .72;
+    ctx.fillStyle = '#0E1116';
+    ctx.font = '800 52px "Bricolage Grotesque", system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(WORD.split('').join(' '), PAD, baseY);
+    ctx.font = '600 30px "Bricolage Grotesque", system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('Letter Hunt · ' + $('date').textContent, W - PAD, baseY);
+
+    $('out').src = c.toDataURL('image/png');
+    $('out').alt = `The word ${WORD} spelled with photographed letters`;
+    $('result').hidden = false;
+    $('result').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+
+    c.toBlob(b => {
+      outBlob = b;
+      const file = new File([b], `letter-hunt-${WORD.toLowerCase()}.png`, { type: 'image/png' });
+      let ok = false;
+      try { ok = !!(navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) {}
+      $('share').hidden = !ok;
+    }, 'image/png');
+  };
+
+  $('share').onclick = async () => {
+    if (!outBlob) return;
+    const file = new File([outBlob], `letter-hunt-${WORD.toLowerCase()}.png`, { type: 'image/png' });
+    try { await navigator.share({ files: [file], title: 'Letter Hunt: ' + WORD }); } catch (e) {}
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>
