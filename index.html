@@ -131,7 +131,7 @@ h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
 <div id="crop" hidden role="dialog" aria-modal="true" aria-labelledby="cropTitle">
   <h2 id="cropTitle">Crop to the letter <b id="cropLetter"></b></h2>
   <div class="vp" id="vp"><img id="cropImg" alt=""></div>
-  <p class="hint">Drag to move, pinch to zoom.</p>
+  <p class="hint">Drag to move, pinch to zoom, twist to rotate.</p>
   <div class="actions">
     <button class="link" id="cancel">Cancel</button>
     <button class="link" id="retake">Retake</button>
@@ -149,6 +149,8 @@ h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
   const KEY = 'letterhunt:' + WORD;
   const ROT = [-2.5, 1.8, -1.2, 2.6, -1.9, 1.1, -2.2, 2];
   const OUT_PX = 600;
+  const GAME_NAME = 'Word on the Street';
+  const SITE_URL = 'yoururl.com'; // placeholder for the export footer
 
   const $ = id => document.getElementById(id);
   const wordEl = $('word'), statusEl = $('status'), makeBtn = $('make'), clearBtn = $('clear');
@@ -197,7 +199,8 @@ h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
   });
 
   // ---- crop ----
-  let V = 0, w = 0, h = 0, s = 1, s0 = 1, tx = 0, ty = 0, srcImg = null, srcUrl = null;
+  let V = 0, w = 0, h = 0, s = 1, s0 = 1, cx = 0, cy = 0, ang = 0, rawAng = 0, srcImg = null, srcUrl = null;
+  const SNAP = 0.05; // ~3°: small twists snap back to straight
   const pts = new Map();
 
   function startCrop(img, url) {
@@ -209,24 +212,39 @@ h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
     requestAnimationFrame(() => {
       V = vp.clientWidth; w = img.naturalWidth; h = img.naturalHeight;
       s0 = Math.max(V / w, V / h); s = s0;
-      tx = (V - w * s) / 2; ty = (V - h * s) / 2;
+      ang = 0; rawAng = 0; cx = V / 2; cy = V / 2;
       cropImg.style.width = w + 'px'; cropImg.style.height = h + 'px';
       apply();
       $('use').focus();
     });
   }
-  function clampAll() {
-    s = Math.min(Math.max(s, s0), s0 * 8);
-    tx = Math.min(0, Math.max(V - w * s, tx));
-    ty = Math.min(0, Math.max(V - h * s, ty));
+  // Image is placed by its center (cx, cy), scale s and angle ang.
+  const spread = () => Math.abs(Math.cos(ang)) + Math.abs(Math.sin(ang));
+  const minScale = () => Math.max(V * spread() / w, V * spread() / h);
+  function toImg(p) { // viewport point -> image coords (from image center, unscaled)
+    const c = Math.cos(-ang), sn = Math.sin(-ang), x = p.x - cx, y = p.y - cy;
+    return { x: (x * c - y * sn) / s, y: (x * sn + y * c) / s };
   }
-  function apply() { cropImg.style.transform = `translate(${tx}px,${ty}px) scale(${s})`; }
+  function anchor(q, p) { // place image so image point q sits at viewport point p
+    const c = Math.cos(ang), sn = Math.sin(ang);
+    cx = p.x - (q.x * c - q.y * sn) * s; cy = p.y - (q.x * sn + q.y * c) * s;
+  }
+  function clampAll() { // keep the crop square fully covered by the photo
+    s = Math.min(Math.max(s, minScale()), s0 * 8);
+    const half = V * spread() / (2 * s);
+    const q = toImg({ x: V / 2, y: V / 2 });
+    const mx = Math.max(0, w / 2 - half), my = Math.max(0, h / 2 - half);
+    q.x = Math.min(mx, Math.max(-mx, q.x)); q.y = Math.min(my, Math.max(-my, q.y));
+    anchor(q, { x: V / 2, y: V / 2 });
+  }
+  function apply() {
+    cropImg.style.transform = `translate(${cx}px,${cy}px) rotate(${ang}rad) scale(${s}) translate(${-w / 2}px,${-h / 2}px)`;
+  }
   function local(e) { const r = vp.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
   function zoomAround(px, py, factor) {
-    const ix = (px - tx) / s, iy = (py - ty) / s;
-    s = Math.min(Math.max(s * factor, s0), s0 * 8);
-    tx = px - ix * s; ty = py - iy * s;
-    clampAll(); apply();
+    const p = { x: px, y: py }, q = toImg(p);
+    s = Math.min(Math.max(s * factor, minScale()), s0 * 8);
+    anchor(q, p); clampAll(); apply();
   }
 
   vp.addEventListener('pointerdown', e => { vp.setPointerCapture(e.pointerId); pts.set(e.pointerId, local(e)); });
@@ -235,7 +253,7 @@ h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
     const cur = local(e);
     if (pts.size === 1) {
       const prev = pts.get(e.pointerId);
-      tx += cur.x - prev.x; ty += cur.y - prev.y;
+      cx += cur.x - prev.x; cy += cur.y - prev.y;
       pts.set(e.pointerId, cur);
       clampAll(); apply();
     } else {
@@ -248,10 +266,13 @@ h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
       const nd = Math.hypot(a1.x - b1.x, a1.y - b1.y) || 1;
       const om = { x: (a0.x + b0.x) / 2, y: (a0.y + b0.y) / 2 };
       const nm = { x: (a1.x + b1.x) / 2, y: (a1.y + b1.y) / 2 };
-      const ix = (om.x - tx) / s, iy = (om.y - ty) / s;
-      s = Math.min(Math.max(s * nd / od, s0), s0 * 8);
-      tx = nm.x - ix * s; ty = nm.y - iy * s;
-      clampAll(); apply();
+      const q = toImg(om);
+      let da = Math.atan2(b1.y - a1.y, b1.x - a1.x) - Math.atan2(b0.y - a0.y, b0.x - a0.x);
+      if (da > Math.PI) da -= 2 * Math.PI; else if (da < -Math.PI) da += 2 * Math.PI;
+      rawAng += da;
+      ang = Math.abs(rawAng) < SNAP ? 0 : rawAng;
+      s = Math.min(Math.max(s * nd / od, minScale()), s0 * 8);
+      anchor(q, nm); clampAll(); apply();
     }
   });
   const end = e => pts.delete(e.pointerId);
@@ -273,7 +294,10 @@ h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
   $('use').onclick = () => {
     const c = document.createElement('canvas');
     c.width = c.height = OUT_PX;
-    c.getContext('2d').drawImage(srcImg, -tx / s, -ty / s, V / s, V / s, 0, 0, OUT_PX, OUT_PX);
+    const ctx = c.getContext('2d'), k = OUT_PX / V;
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    ctx.translate(cx, cy); ctx.rotate(ang); ctx.scale(s, s);
+    ctx.drawImage(srcImg, -w / 2, -h / 2);
     slots[active] = c.toDataURL('image/jpeg', 0.88);
     persist(); closeCrop(); render();
     $('result').hidden = true;
@@ -292,14 +316,16 @@ h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
   makeBtn.onclick = async () => {
     await document.fonts.ready;
     const imgs = await Promise.all(slots.map(loadImg));
-    const T = 360, GAP = 28, PAD = 56, BORDER = 12, FOOT = 96;
-    const W = PAD * 2 + N * T + (N - 1) * GAP, H = PAD + T + FOOT + PAD / 2;
+    const T = 360, GAP = 28, PAD = 56, BORDER = 12, FOOT = 120;
+    const ROW = N * T + (N - 1) * GAP;
+    const W = Math.max(PAD * 2 + ROW, 1240), H = PAD + T + FOOT + PAD / 2;
+    const X0 = (W - ROW) / 2; // centers short words on the minimum width
     const c = document.createElement('canvas'); c.width = W; c.height = H;
     const ctx = c.getContext('2d');
     ctx.fillStyle = '#FFD23F'; ctx.fillRect(0, 0, W, H);
 
     imgs.forEach((im, i) => {
-      const cx = PAD + i * (T + GAP) + T / 2, cy = PAD + T / 2;
+      const cx = X0 + i * (T + GAP) + T / 2, cy = PAD + T / 2;
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(ROT[i % ROT.length] * Math.PI / 180);
@@ -311,14 +337,18 @@ h1{font-size:1.25rem; font-weight:800; margin:0; letter-spacing:-.01em}
       ctx.restore();
     });
 
-    const baseY = PAD + T + FOOT * .72;
+    const baseY = PAD + T + FOOT * .78;
     ctx.fillStyle = '#0E1116';
-    ctx.font = '800 52px "Bricolage Grotesque", system-ui, sans-serif';
+    ctx.font = '800 56px "Bricolage Grotesque", system-ui, sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(WORD.split('').join(' '), PAD, baseY);
-    ctx.font = '600 30px "Bricolage Grotesque", system-ui, sans-serif';
+    ctx.fillText(GAME_NAME, PAD, baseY);
+
     ctx.textAlign = 'right';
-    ctx.fillText('Letter Hunt · ' + $('date').textContent, W - PAD, baseY);
+    ctx.font = '700 28px "Bricolage Grotesque", system-ui, sans-serif';
+    ctx.fillText(`${WORD}   ${$('date').textContent}`, W - PAD, baseY - 36);
+    ctx.font = '500 24px "Bricolage Grotesque", system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(14,17,22,.7)';
+    ctx.fillText(SITE_URL, W - PAD, baseY);
 
     $('out').src = c.toDataURL('image/png');
     $('out').alt = `The word ${WORD} spelled with photographed letters`;
